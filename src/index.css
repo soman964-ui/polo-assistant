@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 24% 6%;
+    --foreground: 213 22% 94%;
+    --card: 222 18% 9.5%;
+    --card-foreground: 213 22% 94%;
+    --popover: 222 20% 8%;
+    --popover-foreground: 213 22% 94%;
+    --primary: 205 88% 55%;
+    --primary-foreground: 220 40% 8%;
+    --secondary: 220 14% 15%;
+    --secondary-foreground: 213 22% 94%;
+    --muted: 220 14% 15%;
+    --muted-foreground: 216 12% 62%;
+    --accent: 205 88% 55%;
+    --accent-foreground: 220 40% 8%;
+    --destructive: 4 78% 56%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 13% 17%;
+    --input: 220 13% 20%;
+    --ring: 205 88% 55%;
+    --radius: 0.75rem;
+
+    --warn: 38 95% 55%;
+    --ok: 152 60% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Manrope', 'Segoe UI', system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .font-display {
+    font-family: 'Unbounded', 'Manrope', system-ui, sans-serif;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* текстура «приборной панели» на фоне страницы */
+  .dash-bg {
+    background-image:
+      radial-gradient(1200px 500px at 80% -10%, hsl(205 88% 55% / 0.07), transparent 60%),
+      radial-gradient(800px 400px at 0% 110%, hsl(205 60% 40% / 0.05), transparent 60%);
+  }
+
+  .card-glow {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(160deg, hsl(0 0% 100% / 0.045), transparent 40%);
+  }
+
+  .odo {
+    letter-spacing: 0.02em;
+    font-feature-settings: 'tnum';
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
