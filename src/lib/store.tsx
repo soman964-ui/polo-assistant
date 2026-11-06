@@ -1,7 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { toast } from 'sonner'
+import { z } from 'zod'
 import type { CarProfile, ExpenseRecord, FuelRecord, MaintenanceRecord } from '@/types'
+import { parseISODateLocal } from '@/lib/dates'
 
-const STORAGE_KEY = 'polo-assistant-v1'
+export const STORAGE_KEY = 'polo-assistant-v1'
+/** Максимальный размер JSON при импорте резервной копии (защита от зависания вкладки) */
+export const IMPORT_MAX_BYTES = 5 * 1024 * 1024
 
 export const DEFAULT_PROFILE: CarProfile = {
   year: 2016,
@@ -45,11 +50,87 @@ function migrateProfile(p: Partial<CarProfile> | undefined): CarProfile {
   return merged
 }
 
-interface AppData {
+export interface AppData {
   profile: CarProfile
   maintenance: MaintenanceRecord[]
   fuel: FuelRecord[]
   expenses: ExpenseRecord[]
+}
+
+/* ── Схемы валидации данных (localStorage / импорт JSON) ─────────── */
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'ожидается дата в формате ГГГГ-ММ-ДД')
+const mileageValue = z.coerce.number().finite().min(0).max(2_000_000)
+const moneyValue = z.coerce.number().finite().min(0).max(1_000_000_000)
+
+const profileSchema = z.object({
+  year: z.coerce.number().int().min(1990).max(2100).catch(DEFAULT_PROFILE.year),
+  engine: z.string().max(24).catch(DEFAULT_PROFILE.engine),
+  transmission: z.string().max(24).catch(DEFAULT_PROFILE.transmission),
+  plate: z.string().max(16).catch(''),
+  vin: z.string().max(17).catch(''),
+  mileage: mileageValue.catch(DEFAULT_PROFILE.mileage),
+  purchaseDate: z.string().max(10).catch(''),
+})
+
+const idValue = z.string().min(1).max(64).catch(() => uid())
+
+const maintenanceSchema = z.object({
+  id: idValue,
+  date: isoDate,
+  mileage: mileageValue,
+  typeId: z.string().max(64).catch('custom'),
+  note: z.string().max(2000).catch(''),
+  cost: moneyValue.catch(0),
+})
+
+const fuelSchema = z.object({
+  id: idValue,
+  date: isoDate,
+  mileage: mileageValue,
+  liters: z.coerce.number().finite().gt(0).max(500),
+  pricePerLiter: z.coerce.number().finite().gt(0).max(10_000),
+  fullTank: z.boolean().catch(true),
+})
+
+const expenseSchema = z.object({
+  id: idValue,
+  date: isoDate,
+  category: z.enum(['service', 'parts', 'insurance', 'tax', 'parking', 'wash', 'tolls', 'other']).catch('other'),
+  description: z.string().max(500).catch(''),
+  amount: moneyValue,
+})
+
+function sanitizeArray<S extends z.ZodTypeAny>(value: unknown, schema: S): z.output<S>[] {
+  if (!Array.isArray(value)) return []
+  const out: z.output<S>[] = []
+  for (const item of value) {
+    const result = schema.safeParse(item)
+    if (result.success) {
+      out.push(result.data)
+    } else {
+      console.warn('Пропущена повреждённая запись при чтении данных:', result.error.issues[0]?.message)
+    }
+  }
+  return out
+}
+
+/**
+ * Приводит недоверенные данные (localStorage / импортированный JSON)
+ * к валидной структуре. Битые отдельные записи отбрасываются,
+ * профиль деградирует до значений по умолчанию по полям.
+ * Возвращает null только если вход вообще не объект.
+ */
+export function sanitizeAppData(parsed: unknown): AppData | null {
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+  const record = parsed as Record<string, unknown>
+  const profile = profileSchema.catch(DEFAULT_PROFILE).parse(record.profile)
+  return {
+    profile: migrateProfile(profile),
+    maintenance: sanitizeArray(record.maintenance, maintenanceSchema),
+    fuel: sanitizeArray(record.fuel, fuelSchema),
+    expenses: sanitizeArray(record.expenses, expenseSchema),
+  }
 }
 
 interface Store extends AppData {
@@ -68,6 +149,9 @@ interface Store extends AppData {
 const StoreContext = createContext<Store | null>(null)
 
 function uid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
@@ -75,13 +159,8 @@ function load(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<AppData>
-      return {
-        profile: migrateProfile(parsed.profile),
-        maintenance: parsed.maintenance ?? [],
-        fuel: parsed.fuel ?? [],
-        expenses: parsed.expenses ?? [],
-      }
+      const data = sanitizeAppData(JSON.parse(raw))
+      if (data) return data
     }
   } catch {
     /* повреждённые данные — начинаем с чистого листа */
@@ -91,9 +170,18 @@ function load(): AppData {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(load)
+  const quotaWarned = useRef(false)
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    } catch (error) {
+      console.error('Не удалось сохранить данные в localStorage:', error)
+      if (!quotaWarned.current) {
+        quotaWarned.current = true
+        toast.error('Хранилище недоступно или переполнено — данные не сохранятся. Сделайте экспорт JSON в настройках.')
+      }
+    }
   }, [data])
 
   const setProfile = useCallback((p: CarProfile) => setData((d) => ({ ...d, profile: p })), [])
@@ -135,18 +223,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const exportData = useCallback(() => JSON.stringify(data, null, 2), [data])
+  const exportData = useCallback(
+    () =>
+      JSON.stringify(
+        {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          ...data,
+        },
+        null,
+        2,
+      ),
+    [data],
+  )
 
   const importData = useCallback((json: string) => {
     try {
-      const parsed = JSON.parse(json) as Partial<AppData>
-      if (typeof parsed !== 'object' || parsed === null) return false
-      setData({
-        profile: migrateProfile(parsed.profile),
-        maintenance: Array.isArray(parsed.maintenance) ? parsed.maintenance : [],
-        fuel: Array.isArray(parsed.fuel) ? parsed.fuel : [],
-        expenses: Array.isArray(parsed.expenses) ? parsed.expenses : [],
-      })
+      if (json.length > IMPORT_MAX_BYTES) return false
+      const data = sanitizeAppData(JSON.parse(json))
+      if (!data) return false
+      setData(data)
       return true
     } catch {
       return false
@@ -242,6 +338,7 @@ export function formatKm(n: number): string {
 
 export function formatDate(iso: string): string {
   if (!iso) return '—'
-  const d = new Date(iso)
+  const d = parseISODateLocal(iso)
+  if (Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
 }

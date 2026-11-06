@@ -1,4 +1,5 @@
 import { MAINTENANCE_SCHEDULE } from '@/data/polo'
+import { parseISODateLocal } from '@/lib/dates'
 import type { MaintenanceRecord, MaintenanceType } from '@/types'
 
 export type DueStatus = 'overdue' | 'soon' | 'ok' | 'unknown'
@@ -50,7 +51,7 @@ export function computeDue(
         progress = Math.max(progress, Math.min(1, (mileage - last.mileage) / type.intervalKm))
       }
       if (type.intervalMonths != null) {
-        const dueAt = new Date(last.date)
+        const dueAt = parseISODateLocal(last.date)
         dueAt.setMonth(dueAt.getMonth() + type.intervalMonths)
         daysLeft = Math.ceil((dueAt.getTime() - now.getTime()) / MS_DAY)
         timeStatus = daysLeft <= 0 ? 'overdue' : daysLeft <= SOON_DAYS ? 'soon' : 'ok'

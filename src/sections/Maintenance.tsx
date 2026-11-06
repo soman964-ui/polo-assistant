@@ -175,6 +175,21 @@ function AddMaintenanceDialog({
   onOpenChange: (o: boolean) => void
   defaultMileage: number
 }) {
+  // Содержимое монтируется заново при каждом открытии — дата и пробег всегда актуальные
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open && <AddMaintenanceForm defaultMileage={defaultMileage} onOpenChange={onOpenChange} />}
+    </Dialog>
+  )
+}
+
+function AddMaintenanceForm({
+  defaultMileage,
+  onOpenChange,
+}: {
+  defaultMileage: number
+  onOpenChange: (o: boolean) => void
+}) {
   const store = useStore()
   const [typeId, setTypeId] = useState(MAINTENANCE_SCHEDULE[0].id)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -206,7 +221,6 @@ function AddMaintenanceDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Запись об обслуживании</DialogTitle>
@@ -256,6 +270,5 @@ function AddMaintenanceDialog({
           <Button onClick={submit}>Сохранить</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
   )
 }

@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Android signing & secrets
+*.keystore
+*.jks
+key.properties
+android/app/google-services.json

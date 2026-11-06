@@ -201,6 +201,21 @@ function AddFuelDialog({
   onOpenChange: (o: boolean) => void
   defaultMileage: number
 }) {
+  // Содержимое монтируется заново при каждом открытии — дата и пробег всегда актуальные
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open && <AddFuelForm defaultMileage={defaultMileage} onOpenChange={onOpenChange} />}
+    </Dialog>
+  )
+}
+
+function AddFuelForm({
+  defaultMileage,
+  onOpenChange,
+}: {
+  defaultMileage: number
+  onOpenChange: (o: boolean) => void
+}) {
   const store = useStore()
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [mileage, setMileage] = useState(String(defaultMileage))
@@ -227,7 +242,6 @@ function AddFuelDialog({
   const total = (parseFloat(liters.replace(',', '.')) || 0) * (parseFloat(price.replace(',', '.')) || 0)
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Новая заправка</DialogTitle>
@@ -268,6 +282,5 @@ function AddFuelDialog({
           <Button onClick={submit}>Сохранить</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
   )
 }

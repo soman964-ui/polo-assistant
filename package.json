@@ -1,7 +1,7 @@
 {
-  "name": "my-app",
+  "name": "polo-assistant",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,8 @@
   "dependencies": {
     "@capacitor/android": "^8.6.0",
     "@capacitor/core": "^8.6.0",
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@fontsource-variable/unbounded": "^5.3.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -43,7 +45,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.562.0",
@@ -72,6 +73,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "^31.0.0",
     "kimi-plugin-inspect-react": "^1.0.3",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
@@ -81,5 +83,14 @@
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
     "vitest": "^5.1.0"
+  },
+  "description": "Помощник владельца VW Polo Sedan/Liftback: журнал ТО, учёт топлива и расходов. Локальное приложение (PWA / Android), все данные хранятся только на устройстве.",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.5"
+    }
   }
 }

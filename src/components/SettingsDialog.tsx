@@ -21,13 +21,56 @@ import { toast } from 'sonner'
 
 export default function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const store = useStore()
+  const [resetOpen, setResetOpen] = useState(false)
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        {/* Содержимое монтируется заново при каждом открытии — поля всегда показывают актуальный профиль */}
+        {open && <SettingsForm onOpenChange={onOpenChange} onResetRequest={() => setResetOpen(true)} />}
+      </Dialog>
+
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Сбросить все данные?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Будут удалены профиль, журнал ТО, заправки и расходы. Действие нельзя отменить — сделайте экспорт заранее.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                store.resetAll()
+                setResetOpen(false)
+                onOpenChange(false)
+                toast.success('Все данные сброшены')
+              }}
+            >
+              Сбросить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
+
+function SettingsForm({
+  onOpenChange,
+  onResetRequest,
+}: {
+  onOpenChange: (o: boolean) => void
+  onResetRequest: () => void
+}) {
+  const store = useStore()
   const { profile } = store
   const [year, setYear] = useState(String(profile.year))
   const [engine, setEngine] = useState(profile.engine)
   const [transmission, setTransmission] = useState(profile.transmission)
   const [plate, setPlate] = useState(profile.plate)
   const [vin, setVin] = useState(profile.vin)
-  const [resetOpen, setResetOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const selectedEngine = ENGINES.find((e) => e.code === engine)
@@ -40,11 +83,16 @@ export default function SettingsDialog({ open, onOpenChange }: { open: boolean; 
       toast.error('Polo для рынка РФ выпускался в 2012–2022 гг. Проверьте год.')
       return
     }
+    const vinNormalized = vin.trim().toUpperCase()
+    if (vinNormalized && !/^[A-HJ-NPR-Z0-9]{17}$/.test(vinNormalized)) {
+      toast.error('VIN должен состоять из 17 символов без букв I, O, Q. Проверьте, пожалуйста.')
+      return
+    }
     if (selectedEngine && !selectedEngine.gearboxes.includes(transmission)) {
       toast.error(`Коробка недоступна для ${selectedEngine.code}. Доступные: ${selectedEngine.gearboxes.join(', ')}`)
       return
     }
-    store.setProfile({ ...profile, year: y, engine, transmission, plate: plate.trim().toUpperCase(), vin: vin.trim().toUpperCase() })
+    store.setProfile({ ...profile, year: y, engine, transmission, plate: plate.trim().toUpperCase(), vin: vinNormalized })
     toast.success('Профиль сохранён')
     onOpenChange(false)
   }
@@ -56,11 +104,15 @@ export default function SettingsDialog({ open, onOpenChange }: { open: boolean; 
     a.href = url
     a.download = `polo-assistant-backup-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
-    URL.revokeObjectURL(url)
-    toast.success('Резервная копия скачана')
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    toast.success('Резервная копия скачана. Файл содержит VIN и госномер — храните его в надёжном месте.')
   }
 
   const doImport = (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Файл больше 5 МБ — похоже, это не резервная копия Polo Assistant.')
+      return
+    }
     const reader = new FileReader()
     reader.onload = () => {
       const ok = store.importData(String(reader.result))
@@ -71,8 +123,6 @@ export default function SettingsDialog({ open, onOpenChange }: { open: boolean; 
   }
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -154,7 +204,7 @@ export default function SettingsDialog({ open, onOpenChange }: { open: boolean; 
               <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} className="gap-2">
                 <Upload className="h-4 w-4" aria-hidden="true" /> Импорт
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setResetOpen(true)} className="gap-2 text-destructive hover:text-destructive">
+              <Button variant="outline" size="sm" onClick={onResetRequest} className="gap-2 text-destructive hover:text-destructive">
                 <Trash2 className="h-4 w-4" aria-hidden="true" /> Сбросить всё
               </Button>
               <input
@@ -170,8 +220,12 @@ export default function SettingsDialog({ open, onOpenChange }: { open: boolean; 
               />
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Данные хранятся локально в этом браузере (localStorage). Экспортируйте резервную копию, чтобы перенести
-              их на другое устройство или не потерять при очистке браузера.
+              Данные хранятся локально на этом устройстве (localStorage) и никуда не отправляются. Экспортируйте резервную
+              копию, чтобы перенести их на другое устройство или не потерять при очистке браузера.
+            </p>
+            <p className="rounded-lg border border-[hsl(38_95%_55%/0.35)] bg-[hsl(38_95%_55%/0.08)] px-3 py-2 text-xs leading-relaxed text-[hsl(38_95%_68%)]">
+              Резервная копия содержит VIN и госномер в открытом виде. Не передавайте файл посторонним,
+              удаляйте его с временных устройств.
             </p>
           </div>
 
@@ -180,31 +234,5 @@ export default function SettingsDialog({ open, onOpenChange }: { open: boolean; 
             <Button onClick={save}>Сохранить</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Сбросить все данные?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Будут удалены профиль, журнал ТО, заправки и расходы. Действие нельзя отменить — сделайте экспорт заранее.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                store.resetAll()
-                setResetOpen(false)
-                onOpenChange(false)
-                toast.success('Все данные сброшены')
-              }}
-            >
-              Сбросить
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
   )
 }
